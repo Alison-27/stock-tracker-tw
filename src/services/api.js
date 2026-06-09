@@ -51,32 +51,65 @@ async function fetchTWSEQuote(code) {
   }
 }
 
-// ── 搜尋：優先從本地股票庫找，找不到再打 TWSE
+// ── 全股清單快取（啟動時非同步載入）
+let _allStocksCache = null
+let _allStocksFetching = false
+
+async function loadAllStocks() {
+  if (_allStocksCache) return _allStocksCache
+  if (_allStocksFetching) {
+    // 等待既有請求完成
+    await new Promise(r => setTimeout(r, 800))
+    return _allStocksCache || MOCK_STOCKS
+  }
+  _allStocksFetching = true
+  try {
+    const res = await fetch(`${TWSE_BASE}/opendata/t187ap03_L`, {
+      headers: { Accept: 'application/json' }
+    })
+    if (!res.ok) throw new Error('TWSE list error')
+    const data = await res.json()
+    if (Array.isArray(data) && data.length > 0) {
+      _allStocksCache = data.map(d => ({
+        code:      d['公司代號'] || '',
+        name:      d['公司簡稱'] || '',
+        price:     0, change: 0, changePct: 0,
+      })).filter(d => d.code && /^\d{4,6}/.test(d.code))
+      return _allStocksCache
+    }
+  } catch { /* 使用本地清單 */ }
+  finally { _allStocksFetching = false }
+  return MOCK_STOCKS
+}
+
+// 應用啟動後立即預載全股清單
+loadAllStocks()
+
+// ── 搜尋：優先從本地股票庫找，再從全股清單找
 export async function searchStocks(query) {
   if (!query) return []
   const q = query.trim()
-  // 1. 本地庫（包含 ETF 代號）
+
+  // 1. 本地庫精確匹配
   const local = MOCK_STOCKS.filter(s =>
     s.code.startsWith(q) || s.name.includes(q)
   ).slice(0, 10)
   if (local.length >= 5) return local
 
-  // 2. 試呼叫 TWSE 全股清單補充
+  // 2. 全股清單（已快取或剛載入）
   try {
-    const data = await fetchTWSE('/opendata/t187ap03_L')   // 上市公司基本資料
-    if (Array.isArray(data)) {
-      return data
-        .filter(d => d['公司代號']?.startsWith(q) || d['公司簡稱']?.includes(q))
-        .slice(0, 10)
-        .map(d => ({
-          code:      d['公司代號'],
-          name:      d['公司簡稱'],
-          price:     0,
-          changePct: 0,
-          change:    0,
-        }))
+    const all = await loadAllStocks()
+    const found = all.filter(s =>
+      s.code.startsWith(q) || s.name.includes(q)
+    ).slice(0, 10)
+    if (found.length > 0) {
+      // 合併本地資料（有 price 的優先）
+      return found.map(s => {
+        const cached = MOCK_STOCKS.find(m => m.code === s.code)
+        return cached || s
+      })
     }
-  } catch { /* fallback 到本地 */ }
+  } catch { /* fallback */ }
   return local
 }
 
