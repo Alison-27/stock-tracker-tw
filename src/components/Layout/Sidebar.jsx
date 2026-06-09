@@ -1,6 +1,7 @@
 import { useApp } from '../../store/AppContext.jsx'
 
 const NAV_ITEMS = [
+  { id: 'scanner', label: '進場掃描', icon: '⊕' },
   { id: 'dashboard', label: '市場總覽', icon: '▦' },
   { id: 'portfolio', label: '投資組合', icon: '◈' },
   { id: 'watchlist', label: '自選清單', icon: '★' },

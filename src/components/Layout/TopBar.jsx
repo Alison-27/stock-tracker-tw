@@ -3,7 +3,7 @@ import { useApp } from '../../store/AppContext.jsx'
 import { MOCK_INDICES } from '../../services/mock.js'
 
 export default function TopBar() {
-  const { searchQuery, searchResults, isSearching, handleSearch, openStockDetail, finmindToken, setFinmindToken } = useApp()
+  const { searchQuery, searchResults, isSearching, handleSearch, openStockDetail, openStockModal, finmindToken, setFinmindToken } = useApp()
   const [showSearch, setShowSearch] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [tokenInput, setTokenInput] = useState(finmindToken)
@@ -55,7 +55,7 @@ export default function TopBar() {
               {searchResults.length > 0 && (
                 <ul className="search-results">
                   {searchResults.map(s => (
-                    <li key={s.code} className="search-result-item" onClick={() => { openStockDetail(s); setShowSearch(false) }}>
+                    <li key={s.code} className="search-result-item" onClick={() => { openStockModal(s); setShowSearch(false) }}>
                       <span className="result-code">{s.code}</span>
                       <span className="result-name">{s.name}</span>
                       <span className={`result-price ${s.changePct >= 0 ? 'up' : 'down'}`}>

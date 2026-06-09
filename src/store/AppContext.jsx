@@ -32,6 +32,7 @@ const DEFAULT_ALERTS = [
 export function AppProvider({ children }) {
   const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedStock, setSelectedStock] = useState(null)
+  const [stockModal, setStockModal] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [isSearching, setIsSearching] = useState(false)
@@ -94,6 +95,14 @@ export function AppProvider({ children }) {
   const openStockDetail = useCallback((stock) => {
     setSelectedStock(stock)
     setActiveTab('stockdetail')
+  }, [])
+
+  const openStockModal = useCallback((stock) => {
+    setStockModal(stock)
+  }, [])
+
+  const closeStockModal = useCallback(() => {
+    setStockModal(null)
   }, [])
 
   // Watchlist group operations
@@ -178,6 +187,7 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       activeTab, setActiveTab,
       selectedStock, setSelectedStock, openStockDetail,
+      stockModal, openStockModal, closeStockModal,
       searchQuery, searchResults, isSearching, handleSearch,
       watchlistGroups, addWatchlistGroup, removeWatchlistGroup, renameWatchlistGroup,
       addStockToGroup, removeStockFromGroup,

@@ -17,10 +17,15 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/twse/, '')
       },
-      '/api/yahoo': {
-        target: 'https://query1.finance.yahoo.com',
+      '/api/mis': {
+        target: 'https://mis.twse.com.tw',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/yahoo/, '')
+        rewrite: (path) => path.replace(/^\/api\/mis/, '')
+      },
+      '/api/twse-hist': {
+        target: 'https://www.twse.com.tw',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/twse-hist/, '')
       }
     }
   }

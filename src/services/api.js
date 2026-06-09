@@ -6,15 +6,15 @@ import {
 
 const isDev = import.meta.env.DEV
 
-// TWSE OpenAPI 有 CORS，可直接呼叫
-const TWSE_BASE   = isDev ? '/api/twse' : 'https://openapi.twse.com.tw/v1'
-// FinMind 直接呼叫（需 token 才能使用大多數資料集）
-const FINMIND_BASE = isDev ? '/api/finmind' : 'https://api.finmindtrade.com/api/v4'
-// TWSE 歷史行情（月份資料，有 CORS）
-const TWSE_HIST   = 'https://www.twse.com.tw/exchangeReport/STOCK_DAY'
+const TWSE_BASE    = isDev ? '/api/twse'      : 'https://openapi.twse.com.tw/v1'
+const FINMIND_BASE = isDev ? '/api/finmind'   : 'https://api.finmindtrade.com/api/v4'
+const MIS_BASE     = isDev ? '/api/mis'       : 'https://mis.twse.com.tw'
+const TWSE_HIST    = isDev ? '/api/twse-hist' : 'https://www.twse.com.tw'
+
+const ENV_TOKEN = import.meta.env.VITE_FINMIND_TOKEN || ''
 
 function getToken() {
-  try { return localStorage.getItem('finmind_token') || '' } catch { return '' }
+  try { return localStorage.getItem('finmind_token') || ENV_TOKEN } catch { return ENV_TOKEN }
 }
 
 async function fetchTWSE(endpoint) {
@@ -33,7 +33,7 @@ async function fetchFinmind(dataset, params = {}) {
 
 // ── 即時報價：TWSE 即時盤中資訊
 async function fetchTWSEQuote(code) {
-  const url = `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&delay=0`
+  const url = `${MIS_BASE}/stock/api/getStockInfo.jsp?ex_ch=tse_${code}.tw&json=1&delay=0`
   const res = await fetch(url)
   if (!res.ok) throw new Error('MIS error')
   const data = await res.json()
@@ -113,7 +113,7 @@ export async function getPriceHistory(code) {
       const d = new Date()
       d.setMonth(d.getMonth() - i)
       const dateStr = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}01`
-      const url = `${TWSE_HIST}?response=json&date=${dateStr}&stockNo=${code}`
+      const url = `${TWSE_HIST}/exchangeReport/STOCK_DAY?response=json&date=${dateStr}&stockNo=${code}`
       const res = await fetch(url)
       const json = await res.json()
       if (json.stat === 'OK' && Array.isArray(json.data)) {
@@ -209,6 +209,113 @@ export async function getMarketNews() {
     return data.data?.length ? data.data : MOCK_NEWS
   } catch {
     return MOCK_NEWS
+  }
+}
+
+// ── 融資融券（FinMind）
+export async function getStockMargin(code) {
+  try {
+    const today = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    const past = new Date(today); past.setDate(past.getDate() - 14)
+    const startStr = `${past.getFullYear()}-${pad(past.getMonth()+1)}-${pad(past.getDate())}`
+    const endStr   = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`
+    const data = await fetchFinmind('TaiwanStockMarginPurchaseShortSale', {
+      stock_id: code, start_date: startStr, end_date: endStr
+    })
+    if (data.data?.length) {
+      const rows = data.data.sort((a, b) => a.date > b.date ? 1 : -1)
+      const latest = rows[rows.length - 1]
+      const prev   = rows[rows.length - 2]
+      return {
+        code,
+        marginBuy:       latest.MarginPurchaseBuy || 0,
+        marginBuyChange: prev ? (latest.MarginPurchaseBuy - prev.MarginPurchaseBuy) : 0,
+        shortSell:       latest.ShortSaleSell || 0,
+        shortSellChange: prev ? (latest.ShortSaleSell - prev.ShortSaleSell) : 0,
+        coverRatio:      latest.ShortSaleSell > 0
+          ? parseFloat((latest.MarginPurchaseBuy / latest.ShortSaleSell).toFixed(2))
+          : 0,
+        raw: rows.slice(-5),
+      }
+    }
+    throw new Error('empty')
+  } catch {
+    return null
+  }
+}
+
+// ── 本益比/殖利率/淨值比（FinMind）
+export async function getStockPER(code) {
+  try {
+    const today = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    const past = new Date(today); past.setDate(past.getDate() - 30)
+    const startStr = `${past.getFullYear()}-${pad(past.getMonth()+1)}-${pad(past.getDate())}`
+    const endStr   = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`
+    const data = await fetchFinmind('TaiwanStockPER', {
+      stock_id: code, start_date: startStr, end_date: endStr
+    })
+    if (data.data?.length) {
+      const latest = data.data.sort((a, b) => a.date > b.date ? 1 : -1).slice(-1)[0]
+      return {
+        pe:  parseFloat(latest.PER)  || null,
+        pb:  parseFloat(latest.PBR)  || null,
+        div: parseFloat(latest.dividend_yield) || null,
+        date: latest.date,
+      }
+    }
+    throw new Error('empty')
+  } catch {
+    return null
+  }
+}
+
+// ── 法人彙總（近7日加總，FinMind）
+export async function getStockInstitutionalSummary(code) {
+  try {
+    const today = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    const past = new Date(today); past.setDate(past.getDate() - 10)
+    const startStr = `${past.getFullYear()}-${pad(past.getMonth()+1)}-${pad(past.getDate())}`
+    const endStr   = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`
+    const data = await fetchFinmind('TaiwanStockInstitutionalInvestorsBuySell', {
+      stock_id: code, start_date: startStr, end_date: endStr
+    })
+    if (!data.data?.length) throw new Error('empty')
+    const rows = data.data
+    const sum = (name) => rows
+      .filter(r => r.name === name)
+      .reduce((acc, r) => acc + ((r.buy || 0) - (r.sell || 0)), 0)
+    return {
+      foreign: sum('外資及陸資(不含外資自營商)') || sum('外資'),
+      trust:   sum('投信'),
+      dealer:  sum('自營商(自行買賣)') + sum('自營商(避險)') || sum('自營商'),
+      get total() { return this.foreign + this.trust + this.dealer },
+      raw: rows,
+    }
+  } catch {
+    return null
+  }
+}
+
+// ── 當日法人買賣明細（FinMind）
+export async function getDailyInstitutional(code) {
+  try {
+    const today = new Date()
+    const pad = n => String(n).padStart(2, '0')
+    const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    // 往前抓 7 天確保有資料（法人資料盤後才更新）
+    const past = new Date(today)
+    past.setDate(past.getDate() - 7)
+    const startStr = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())}`
+    const data = await fetchFinmind('TaiwanStockInstitutionalInvestorsBuySell', {
+      stock_id: code, start_date: startStr, end_date: dateStr
+    })
+    if (data.data?.length) return data.data
+    throw new Error('empty')
+  } catch {
+    return []
   }
 }
 

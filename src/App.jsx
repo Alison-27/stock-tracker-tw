@@ -14,10 +14,13 @@ import TradingStats from './components/TradingStats/TradingStats.jsx'
 import Alerts from './components/Alerts/Alerts.jsx'
 import News from './components/News/News.jsx'
 import StockDetail from './components/StockDetail/StockDetail.jsx'
+import StockAnalysisModal from './components/StockAnalysisModal/StockAnalysisModal.jsx'
+import HotScanner from './components/HotScanner/HotScanner.jsx'
 
 function MainContent() {
   const { activeTab } = useApp()
   const pages = {
+    scanner: <HotScanner />,
     dashboard: <Dashboard />,
     portfolio: <Portfolio />,
     watchlist: <Watchlist />,
@@ -44,6 +47,7 @@ function AppShell() {
         <main className="main-content">
           <MainContent />
         </main>
+        <StockAnalysisModal />
       </div>
     </div>
   )
