@@ -227,7 +227,6 @@ export async function getPriceHistory(code) {
   } catch { /* fallback */ }
 
   return MOCK_PRICE_HISTORY(code)
-  }
 }
 
 // ── 三大法人
