@@ -85,32 +85,33 @@ async function loadAllStocks() {
 // 應用啟動後立即預載全股清單
 loadAllStocks()
 
-// ── 搜尋：優先從本地股票庫找，再從全股清單找
+// ── 搜尋：本地庫優先，再從 TWSE 全股清單補充
 export async function searchStocks(query) {
   if (!query) return []
   const q = query.trim()
 
-  // 1. 本地庫精確匹配
+  // 1. 如果全股清單已快取，直接用它搜尋
+  if (_allStocksCache) {
+    const found = _allStocksCache.filter(s =>
+      s.code.startsWith(q) || s.name.includes(q)
+    ).slice(0, 10).map(s => MOCK_STOCKS.find(m => m.code === s.code) || s)
+    if (found.length > 0) return found
+  }
+
+  // 2. 本地庫搜尋（200+ 常見股票，不需 API）
   const local = MOCK_STOCKS.filter(s =>
     s.code.startsWith(q) || s.name.includes(q)
   ).slice(0, 10)
-  if (local.length >= 5) return local
+  if (local.length > 0) return local
 
-  // 2. 全股清單（已快取或剛載入）
+  // 3. 嘗試從 TWSE 載入全股清單（非同步補充）
   try {
     const all = await loadAllStocks()
-    const found = all.filter(s =>
+    return all.filter(s =>
       s.code.startsWith(q) || s.name.includes(q)
-    ).slice(0, 10)
-    if (found.length > 0) {
-      // 合併本地資料（有 price 的優先）
-      return found.map(s => {
-        const cached = MOCK_STOCKS.find(m => m.code === s.code)
-        return cached || s
-      })
-    }
-  } catch { /* fallback */ }
-  return local
+    ).slice(0, 10).map(s => MOCK_STOCKS.find(m => m.code === s.code) || s)
+  } catch { }
+  return []
 }
 
 // ── TWSE 當日收盤價快取（用於生產環境 MIS CORS 失敗時的備用）
