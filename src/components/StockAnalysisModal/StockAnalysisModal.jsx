@@ -488,7 +488,7 @@ export default function StockAnalysisModal() {
                 <div className="strat-rows">
                   <div className="strat-row"><span className="sr-k">量能</span><span className="sr-v">成交量需較前日放大，確認方向有效</span></div>
                   <div className="strat-row"><span className="sr-k">法人</span><span className="sr-v">外資連續買超 3 日以上為強烈訊號</span></div>
-                  <div className="strat-row"><span className="sr-k">均線</span><span className="sr-v">MA5 > MA10 > MA20 多頭排列最佳</span></div>
+                  <div className="strat-row"><span className="sr-k">均線</span><span className="sr-v">MA5 &gt; MA10 &gt; MA20 多頭排列最佳</span></div>
                   <div className="strat-row"><span className="sr-k">籌碼</span><span className="sr-v">融資持續減少代表散戶出清、籌碼乾淨</span></div>
                   <div className="strat-row"><span className="sr-k">大盤</span><span className="sr-v">加權指數若走弱，個股多單需降低倉位</span></div>
                 </div>
