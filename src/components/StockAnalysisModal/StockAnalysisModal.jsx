@@ -105,6 +105,12 @@ function generateStrategy(stock, history, inst, margin) {
 export default function StockAnalysisModal() {
   const { stockModal, closeStockModal } = useApp()
   const [tab, setTab] = useState('price')
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') closeStockModal() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [closeStockModal])
   const [history, setHistory] = useState([])
   const [instData, setInstData] = useState([])
   const [loading, setLoading] = useState(false)
