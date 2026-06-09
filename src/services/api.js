@@ -178,8 +178,9 @@ export async function getAllStocks() {
   }
 }
 
-// ── 價格歷史：TWSE 月份資料（3個月）
+// ── 價格歷史：TWSE 月份資料（3個月），失敗則用 FinMind 備用
 export async function getPriceHistory(code) {
+  // 1. 嘗試 TWSE（dev 走 proxy，prod 可能有 CORS）
   try {
     const months = []
     for (let i = 2; i >= 0; i--) {
@@ -191,7 +192,6 @@ export async function getPriceHistory(code) {
       const json = await res.json()
       if (json.stat === 'OK' && Array.isArray(json.data)) {
         json.data.forEach(row => {
-          // row: [日期, 成交股數, 成交金額, 開盤, 最高, 最低, 收盤, 漲跌, 成交筆數]
           const close = parseFloat(row[6]?.replace(/,/g, ''))
           if (!close) return
           months.push({
@@ -199,17 +199,34 @@ export async function getPriceHistory(code) {
             open:   parseFloat(row[3]?.replace(/,/g, '')) || close,
             high:   parseFloat(row[4]?.replace(/,/g, '')) || close,
             low:    parseFloat(row[5]?.replace(/,/g, '')) || close,
-            close,
-            price:  close,
+            close, price: close,
             volume: parseInt(row[1]?.replace(/,/g, '')) || 0,
           })
         })
       }
     }
     if (months.length > 0) return months
-    throw new Error('no data')
-  } catch {
-    return MOCK_PRICE_HISTORY(code)
+  } catch { /* try FinMind */ }
+
+  // 2. FinMind 備用（支援 CORS，需 token）
+  try {
+    const pad = n => String(n).padStart(2, '0')
+    const today = new Date()
+    const past  = new Date(today); past.setDate(past.getDate() - 90)
+    const data  = await fetchFinmind('TaiwanStockPrice', {
+      stock_id: code,
+      start_date: `${past.getFullYear()}-${pad(past.getMonth()+1)}-${pad(past.getDate())}`,
+      end_date:   `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`,
+    })
+    if (data.data?.length > 0) {
+      return data.data.map(r => ({
+        date: r.date, open: r.open, high: r.max, low: r.min,
+        close: r.close, price: r.close, volume: r.Trading_Volume || 0,
+      }))
+    }
+  } catch { /* fallback */ }
+
+  return MOCK_PRICE_HISTORY(code)
   }
 }
 
