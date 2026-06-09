@@ -4,31 +4,40 @@ import {
   MOCK_INDICES
 } from './mock.js'
 
-const FINMIND_TOKEN = localStorage.getItem('finmind_token') || ''
+// dev 環境走 vite proxy，production 直接呼叫真實 API
+const isDev = import.meta.env.DEV
+const FINMIND_BASE = isDev ? '/api/finmind' : 'https://api.finmindtrade.com/api/v4'
+const TWSE_BASE    = isDev ? '/api/twse'    : 'https://openapi.twse.com.tw/v1'
+// Yahoo Finance 有 CORS 限制，production 透過公開 proxy，失敗時 fallback mock
+const YAHOO_BASE   = isDev ? '/api/yahoo'   : 'https://corsproxy.io/?https://query1.finance.yahoo.com'
+
+function getFinmindToken() {
+  try { return localStorage.getItem('finmind_token') || '' } catch { return '' }
+}
 
 async function fetchFinmind(dataset, params = {}) {
-  const queryParams = new URLSearchParams({ dataset, token: FINMIND_TOKEN, ...params })
-  const res = await fetch(`/api/finmind/data?${queryParams}`)
+  const token = getFinmindToken()
+  const queryParams = new URLSearchParams({ dataset, ...(token && { token }), ...params })
+  const res = await fetch(`${FINMIND_BASE}/data?${queryParams}`)
   if (!res.ok) throw new Error('FinMind API error')
   return res.json()
 }
 
 async function fetchTWSE(endpoint) {
-  const res = await fetch(`/api/twse${endpoint}`)
+  const res = await fetch(`${TWSE_BASE}${endpoint}`)
   if (!res.ok) throw new Error('TWSE API error')
   return res.json()
 }
 
 async function fetchYahoo(symbol, range = '3mo', interval = '1d') {
-  const res = await fetch(`/api/yahoo/v8/finance/chart/${symbol}.TW?range=${range}&interval=${interval}`)
+  const res = await fetch(`${YAHOO_BASE}/v8/finance/chart/${symbol}.TW?range=${range}&interval=${interval}`)
   if (!res.ok) throw new Error('Yahoo Finance API error')
   return res.json()
 }
 
 export async function getMarketIndices() {
   try {
-    const data = await fetchTWSE('/exchangeReport/FMTQIK')
-    return data
+    return await fetchTWSE('/exchangeReport/FMTQIK')
   } catch {
     return MOCK_INDICES
   }
@@ -37,8 +46,7 @@ export async function getMarketIndices() {
 export async function getStockQuote(code) {
   try {
     const data = await fetchYahoo(code)
-    const result = data.chart.result[0]
-    const meta = result.meta
+    const meta = data.chart.result[0].meta
     return {
       code,
       name: meta.shortName || code,
@@ -54,8 +62,7 @@ export async function getStockQuote(code) {
 
 export async function getMultipleQuotes(codes) {
   try {
-    const promises = codes.map(code => getStockQuote(code))
-    return Promise.all(promises)
+    return await Promise.all(codes.map(code => getStockQuote(code)))
   } catch {
     return MOCK_STOCKS.filter(s => codes.includes(s.code))
   }
@@ -81,16 +88,15 @@ export async function getPriceHistory(code) {
   try {
     const data = await fetchYahoo(code, '3mo', '1d')
     const result = data.chart.result[0]
-    const timestamps = result.timestamp
     const quotes = result.indicators.quote[0]
-    return timestamps.map((ts, i) => ({
+    return result.timestamp.map((ts, i) => ({
       date: new Date(ts * 1000).toISOString().split('T')[0],
-      open: parseFloat((quotes.open[i] || 0).toFixed(2)),
-      high: parseFloat((quotes.high[i] || 0).toFixed(2)),
-      low: parseFloat((quotes.low[i] || 0).toFixed(2)),
-      close: parseFloat((quotes.close[i] || 0).toFixed(2)),
+      open:   parseFloat((quotes.open[i]  || 0).toFixed(2)),
+      high:   parseFloat((quotes.high[i]  || 0).toFixed(2)),
+      low:    parseFloat((quotes.low[i]   || 0).toFixed(2)),
+      close:  parseFloat((quotes.close[i] || 0).toFixed(2)),
       volume: quotes.volume[i] || 0,
-      price: parseFloat((quotes.close[i] || 0).toFixed(2)),
+      price:  parseFloat((quotes.close[i] || 0).toFixed(2)),
     }))
   } catch {
     return MOCK_PRICE_HISTORY(code)
@@ -100,8 +106,7 @@ export async function getPriceHistory(code) {
 export async function getInstitutionalInvestors(date) {
   try {
     const d = date || new Date().toISOString().split('T')[0].replace(/-/g, '')
-    const data = await fetchTWSE(`/fund/TWT38U?response=json&date=${d}`)
-    return data
+    return await fetchTWSE(`/fund/TWT38U?response=json&date=${d}`)
   } catch {
     return MOCK_INSTITUTIONAL
   }
@@ -109,8 +114,7 @@ export async function getInstitutionalInvestors(date) {
 
 export async function getMarginTrading() {
   try {
-    const data = await fetchTWSE('/exchangeReport/MI_MARGN?response=json')
-    return data
+    return await fetchTWSE('/exchangeReport/MI_MARGN?response=json')
   } catch {
     return MOCK_MARGIN
   }
@@ -136,8 +140,7 @@ export async function getBigPlayers() {
 
 export async function getETFList() {
   try {
-    const data = await fetchTWSE('/exchangeReport/ETF_DAY?response=json')
-    return data || MOCK_ETF
+    return await fetchTWSE('/exchangeReport/ETF_DAY?response=json') || MOCK_ETF
   } catch {
     return MOCK_ETF
   }
@@ -145,8 +148,7 @@ export async function getETFList() {
 
 export async function getTradingStats() {
   try {
-    const data = await fetchTWSE('/exchangeReport/FMTQIK?response=json')
-    return data || MOCK_TRADING_STATS
+    return await fetchTWSE('/exchangeReport/FMTQIK?response=json') || MOCK_TRADING_STATS
   } catch {
     return MOCK_TRADING_STATS
   }
@@ -162,9 +164,7 @@ export async function getMarketNews() {
 }
 
 export async function searchStocks(query) {
-  if (!query || query.length < 1) return []
+  if (!query) return []
   const all = await getAllStocks().catch(() => MOCK_STOCKS)
-  return all.filter(s =>
-    s.code.includes(query) || s.name.includes(query)
-  ).slice(0, 10)
+  return all.filter(s => s.code.includes(query) || s.name.includes(query)).slice(0, 10)
 }
