@@ -121,8 +121,17 @@ export default function StockAnalysisModal() {
 
   const stock = liveStock || stockModal
 
+  // 以 stockModal 為開關依據（liveStock 有殘留時不影響關閉）
   useEffect(() => {
-    if (!stockModal?.code) { setLiveStock(null); return }
+    if (!stockModal?.code) {
+      setLiveStock(null)
+      setHistory([])
+      setInstData([])
+      setLiveInst(null)
+      setLiveMargin(null)
+      setLivePER(null)
+      return
+    }
     setTab('price')
     setHistory([])
     setInstData([])
@@ -146,7 +155,7 @@ export default function StockAnalysisModal() {
       setLiveMargin(margin)
       setLivePER(per)
     }).finally(() => setLoading(false))
-  }, [stock?.code])
+  }, [stockModal?.code])
 
   // 優先使用真實 API 資料，fallback 到 mock
   const inst   = liveInst   || MOCK_INSTITUTIONAL.find(i => i.code === stock?.code)
@@ -156,7 +165,7 @@ export default function StockAnalysisModal() {
     return generateStrategy(stock, history, inst, margin)
   }, [stock, history, inst, margin])
 
-  if (!stock) return null
+  if (!stockModal) return null
 
   const up = stock.changePct >= 0
   const recent = history.slice(-30)
