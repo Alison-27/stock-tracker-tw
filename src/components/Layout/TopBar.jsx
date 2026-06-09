@@ -50,6 +50,12 @@ export default function TopBar() {
                 placeholder="輸入股票代號或名稱..."
                 value={searchQuery}
                 onChange={e => handleSearch(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && searchResults.length > 0) {
+                    openStockModal(searchResults[0])
+                    setShowSearch(false)
+                  }
+                }}
               />
               {isSearching && <div className="search-hint">搜尋中...</div>}
               {searchResults.length > 0 && (
@@ -59,7 +65,7 @@ export default function TopBar() {
                       <span className="result-code">{s.code}</span>
                       <span className="result-name">{s.name}</span>
                       <span className={`result-price ${s.changePct >= 0 ? 'up' : 'down'}`}>
-                        {s.price?.toFixed(2)}
+                        {s.price > 0 ? s.price.toFixed(2) : '—'}
                       </span>
                     </li>
                   ))}

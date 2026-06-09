@@ -113,10 +113,50 @@ export async function searchStocks(query) {
   return local
 }
 
-// ── 單股報價
+// ── TWSE 當日收盤價快取（用於生產環境 MIS CORS 失敗時的備用）
+let _dayPriceCache = null
+async function fetchDayPriceCache() {
+  if (_dayPriceCache) return _dayPriceCache
+  try {
+    const res = await fetch(`${TWSE_BASE}/exchangeReport/STOCK_DAY_ALL`, {
+      headers: { Accept: 'application/json' }
+    })
+    if (!res.ok) throw new Error('day price error')
+    const data = await res.json()
+    if (Array.isArray(data) && data.length > 0) {
+      _dayPriceCache = {}
+      data.forEach(d => {
+        const code = d['證券代號']?.trim()
+        const close = parseFloat(d['收盤價']?.replace(/,/g, ''))
+        const prev  = parseFloat(d['開盤價']?.replace(/,/g, '')) || close
+        const name  = d['證券名稱']?.trim()
+        if (code && close) {
+          _dayPriceCache[code] = {
+            code, name, price: close,
+            change:    parseFloat((close - prev).toFixed(2)),
+            changePct: prev ? parseFloat(((close - prev) / prev * 100).toFixed(2)) : 0,
+          }
+        }
+      })
+      return _dayPriceCache
+    }
+  } catch { /* ignore */ }
+  return {}
+}
+
+// ── 單股報價：MIS 即時 → TWSE 收盤 → Mock
 export async function getStockQuote(code) {
-  try { return await fetchTWSEQuote(code) }
-  catch { return MOCK_STOCKS.find(s => s.code === code) || { code, name: code, price: 0, change: 0, changePct: 0 } }
+  // 1. 嘗試 MIS 即時盤中（盤中最準，但生產環境有 CORS 限制）
+  try { return await fetchTWSEQuote(code) } catch { /* next */ }
+
+  // 2. TWSE 當日收盤價（生產環境可用，盤後更新）
+  try {
+    const cache = await fetchDayPriceCache()
+    if (cache[code]) return cache[code]
+  } catch { /* next */ }
+
+  // 3. Mock 備用
+  return MOCK_STOCKS.find(s => s.code === code) || { code, name: code, price: 0, change: 0, changePct: 0 }
 }
 
 export async function getMultipleQuotes(codes) {
